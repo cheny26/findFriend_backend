@@ -40,13 +40,11 @@ public class UserController {
     private UserService userService;
 
 
-    // region 登录相关
-
     /**
      * 用户注册
      *
-     * @param userRegisterRequest
-     * @return
+     * @param userRegisterRequest 用户注册请求DTO
+     * @return 用户id
      */
     @PostMapping("/register")
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) {
@@ -66,9 +64,9 @@ public class UserController {
     /**
      * 用户登录
      *
-     * @param userLoginRequest
-     * @param request
-     * @return
+     * @param userLoginRequest 用户登录请求DTO
+     * @param request HttpServletRequest
+     * @return LoginUserVO
      */
     @PostMapping("/login")
     public BaseResponse<LoginUserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
@@ -88,8 +86,8 @@ public class UserController {
     /**
      * 用户注销
      *
-     * @param request
-     * @return
+     * @param request HttpServletRequest
+     * @return 是否注销成功
      */
     @PostMapping("/logout")
     public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
@@ -103,18 +101,15 @@ public class UserController {
     /**
      * 获取当前登录用户
      *
-     * @param request
-     * @return
+     * @param request HttpServletRequest
+     * @return LoginUserVO
      */
     @GetMapping("/get/login")
-    public BaseResponse<LoginUserVO> getLoginUser(HttpServletRequest request) {
+    public BaseResponse<UserVO> getLoginUser(HttpServletRequest request) {
         User user = userService.getLoginUser(request);
-        return ResultUtils.success(userService.getLoginUserVO(user));
+        return ResultUtils.success(userService.getUserVO(user));
     }
 
-    // endregion
-
-    // region 增删改查
 
     /**
      * 创建用户
@@ -158,21 +153,19 @@ public class UserController {
     /**
      * 更新用户
      *
-     * @param userUpdateRequest
      * @param request
      * @return
      */
     @PostMapping("/update")
-    public BaseResponse<Boolean> updateUser(@RequestBody UserUpdateRequest userUpdateRequest,
+    public BaseResponse<Integer> updateUser(@RequestBody User user,
             HttpServletRequest request) {
-        if (userUpdateRequest == null || userUpdateRequest.getId() == null) {
+        // 校验参数是否为空
+        if (user == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        User user = new User();
-        BeanUtils.copyProperties(userUpdateRequest, user);
-        boolean result = userService.updateById(user);
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
-        return ResultUtils.success(true);
+        User loginUser = userService.getLoginUser(request);
+        int result = userService.updateUser(user, loginUser);
+        return ResultUtils.success(result);
     }
 
     /**

@@ -35,14 +35,14 @@ import static com.cheny.findFriend.constant.UserConstant.USER_LOGIN_STATE;
 /**
  * 用户服务实现
  *
- * @author <a href="https://github.com/liyupi">程序员鱼皮</a>
- * @from <a href="https://yupi.icu">编程导航知识星球</a>
  */
 @Service
 @Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+
     @Resource
     private UserMapper userMapper;
+
     /**
      * 盐值，混淆密码
      */
@@ -76,7 +76,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             // 账户不能重复
             QueryWrapper<User> queryWrapper = new QueryWrapper<>();
             queryWrapper.eq("userAccount", userAccount);
-            long count = this.baseMapper.selectCount(queryWrapper);
+            long count = userMapper.selectCount(queryWrapper);
             if (count > 0) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号重复");
             }
@@ -86,8 +86,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             User user = new User();
             user.setUserAccount(userAccount);
             user.setUserPassword(encryptPassword);
-            boolean saveResult = this.save(user);
-            if (!saveResult) {
+            int  saveResult= userMapper.insert(user);
+            if (saveResult<=0) {
                 throw new BusinessException(ErrorCode.SYSTEM_ERROR, "注册失败，数据库错误");
             }
             return user.getId();
@@ -95,11 +95,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     /**
-     *
+     * 用户登录
      * @param userAccount  用户账户
      * @param userPassword 用户密码
      * @param request  HttpServletRequest
-     * @return 用户视图
+     * @return LoginUserVO
      */
     @Override
     public LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request) {
@@ -119,7 +119,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("userAccount", userAccount);
         queryWrapper.eq("userPassword", encryptPassword);
-        User user = this.baseMapper.selectOne(queryWrapper);
+        User user = userMapper.selectOne(queryWrapper);
         // 用户不存在
         if (user == null) {
             log.info("user login failed, userAccount cannot match userPassword");
@@ -147,6 +147,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         // 从数据库查询（追求性能的话可以注释，直接走缓存）
         long userId = currentUser.getId();
+        //为了确保获取到的是最新、有效的用户信息，并且与数据库中的数据一致
         currentUser = this.getById(userId);
         if (currentUser == null) {
             throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
@@ -154,30 +155,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return currentUser;
     }
 
-    /**
-     * 获取当前登录用户（允许未登录）
-     *
-     * @param request
-     * @return
-     */
-    @Override
-    public User getLoginUserPermitNull(HttpServletRequest request) {
-        // 先判断是否已登录
-        Object userObj = request.getSession().getAttribute(USER_LOGIN_STATE);
-        User currentUser = (User) userObj;
-        if (currentUser == null || currentUser.getId() == null) {
-            return null;
-        }
-        // 从数据库查询（追求性能的话可以注释，直接走缓存）
-        long userId = currentUser.getId();
-        return this.getById(userId);
-    }
+
 
     /**
      * 是否为管理员
      *
-     * @param request
-     * @return
+     * @param request HttpServletRequest
+     * @return 是否为管理员
      */
     @Override
     public boolean isAdmin(HttpServletRequest request) {
@@ -195,7 +179,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     /**
      * 用户注销
      *
-     * @param request
+     * @param request HttpServletRequest
      */
     @Override
     public boolean userLogout(HttpServletRequest request) {
@@ -294,5 +278,24 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
             }
             return true;
         }).map(this::getUserVO).collect(Collectors.toList());
+    }
+
+    @Override
+    public int updateUser(User user, User loginUser) {
+        //校验参数
+        long id=user.getId();
+        if(id<0){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"请求参数错误");
+        }
+        //只有管理员和自己可以修改
+        if(!isAdmin(loginUser) && loginUser.getId()!=id){
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR,"没有权限修改");
+        }
+        //更新
+        User oldUser = userMapper.selectById(id);
+        if (oldUser == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR,"该用户不存在");
+        }
+        return userMapper.updateById(user);
     }
 }
