@@ -17,12 +17,18 @@ import com.cheny.findFriend.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static com.cheny.findFriend.service.impl.UserServiceImpl.SALT;
 
@@ -39,6 +45,8 @@ public class UserController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private RedisTemplate<String,Object> redisTemplate;
 
     /**
      * 用户注册
@@ -272,5 +280,22 @@ public class UserController {
         }
         List<UserVO> usersByTags = userService.findUsersByTags(tagNames);
         return ResultUtils.success(usersByTags);
+    }
+
+    @GetMapping("/recommend")
+    public BaseResponse<List<UserVO>> recommend(long current,long pageSize,HttpServletRequest request){
+        long id=userService.getLoginUser(request).getId();
+        String key=String.format("findFriend:user:recommend:%s",id);
+        ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
+        //先从缓存取
+        Page<User> userPage=(Page<User>) valueOperations.get(key);
+        if(userPage==null){
+            //数据库查询
+            userPage = userService.page(new Page<>(current, pageSize));
+            valueOperations.set(key,userPage,1, TimeUnit.HOURS);
+        }
+        List<User> userList=userPage.getRecords();
+        List<UserVO> collect = userList.stream().map(user -> userService.getUserVO(user)).collect(Collectors.toList());
+        return ResultUtils.success(collect);
     }
 }
