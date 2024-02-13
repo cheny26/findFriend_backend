@@ -75,6 +75,11 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+            <version>3.26.0</version>
+        </dependency>
         <!--hutool是一个Java工具包，提供了丰富的工具方法，用于简化开发-->
         <!-- https://hutool.cn/docs/index.html#/-->
         <dependency>
